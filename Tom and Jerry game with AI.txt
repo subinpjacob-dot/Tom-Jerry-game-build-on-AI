@@ -1,0 +1,247 @@
+import React, { useState, useEffect, useCallback } from 'react';
+
+const TomAndJerryGame = () => {
+  const [jerryPos, setJerryPos] = useState({ x: 50, y: 50 });
+  const [tomPos, setTomPos] = useState({ x: 700, y: 500 });
+  const [items, setItems] = useState([]);
+  const [score, setScore] = useState(0);
+  const [gameOver, setGameOver] = useState(false);
+  const [gameWon, setGameWon] = useState(false);
+  const [keys, setKeys] = useState({});
+
+  const CANVAS_WIDTH = 800;
+  const CANVAS_HEIGHT = 600;
+  const JERRY_SIZE = 40;
+  const TOM_SIZE = 50;
+  const ITEM_SIZE = 30;
+  const WINNING_SCORE = 15;
+
+  // Initialize items
+  useEffect(() => {
+    const initialItems = [];
+    for (let i = 0; i < 10; i++) {
+      initialItems.push({
+        x: Math.random() * (CANVAS_WIDTH - ITEM_SIZE),
+        y: Math.random() * (CANVAS_HEIGHT - ITEM_SIZE),
+        type: Math.random() > 0.5 ? 'cheese' : 'biscuit',
+        id: i
+      });
+    }
+    setItems(initialItems);
+  }, []);
+
+  // Handle keyboard input
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      setKeys(prev => ({ ...prev, [e.key]: true }));
+    };
+
+    const handleKeyUp = (e) => {
+      setKeys(prev => ({ ...prev, [e.key]: false }));
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, []);
+
+  // Game loop
+  useEffect(() => {
+    if (gameOver || gameWon) return;
+
+    const gameLoop = setInterval(() => {
+      // Move Jerry
+      setJerryPos(prev => {
+        let newX = prev.x;
+        let newY = prev.y;
+
+        if (keys['ArrowLeft'] || keys['a']) newX -= 5;
+        if (keys['ArrowRight'] || keys['d']) newX += 5;
+        if (keys['ArrowUp'] || keys['w']) newY -= 5;
+        if (keys['ArrowDown'] || keys['s']) newY += 5;
+
+        // Keep Jerry in bounds
+        newX = Math.max(0, Math.min(CANVAS_WIDTH - JERRY_SIZE, newX));
+        newY = Math.max(0, Math.min(CANVAS_HEIGHT - JERRY_SIZE, newY));
+
+        return { x: newX, y: newY };
+      });
+
+      // Move Tom towards Jerry
+      setTomPos(prev => {
+        const dx = jerryPos.x - prev.x;
+        const dy = jerryPos.y - prev.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        if (distance > 0) {
+          const speed = 2;
+          return {
+            x: prev.x + (dx / distance) * speed,
+            y: prev.y + (dy / distance) * speed
+          };
+        }
+        return prev;
+      });
+
+      // Check collisions with items
+      setItems(prevItems => {
+        const remaining = prevItems.filter(item => {
+          const dx = jerryPos.x + JERRY_SIZE / 2 - (item.x + ITEM_SIZE / 2);
+          const dy = jerryPos.y + JERRY_SIZE / 2 - (item.y + ITEM_SIZE / 2);
+          const distance = Math.sqrt(dx * dx + dy * dy);
+
+          if (distance < (JERRY_SIZE + ITEM_SIZE) / 2) {
+            setScore(s => {
+              const newScore = s + (item.type === 'cheese' ? 2 : 1);
+              if (newScore >= WINNING_SCORE) {
+                setGameWon(true);
+              }
+              return newScore;
+            });
+            return false;
+          }
+          return true;
+        });
+        return remaining;
+      });
+
+      // Check collision with Tom
+      const dx = jerryPos.x - tomPos.x;
+      const dy = jerryPos.y - tomPos.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      if (distance < (JERRY_SIZE + TOM_SIZE) / 2) {
+        setGameOver(true);
+      }
+    }, 1000 / 60);
+
+    return () => clearInterval(gameLoop);
+  }, [keys, jerryPos, gameOver, gameWon]);
+
+  const resetGame = () => {
+    setJerryPos({ x: 50, y: 50 });
+    setTomPos({ x: 700, y: 500 });
+    setScore(0);
+    setGameOver(false);
+    setGameWon(false);
+    
+    const newItems = [];
+    for (let i = 0; i < 10; i++) {
+      newItems.push({
+        x: Math.random() * (CANVAS_WIDTH - ITEM_SIZE),
+        y: Math.random() * (CANVAS_HEIGHT - ITEM_SIZE),
+        type: Math.random() > 0.5 ? 'cheese' : 'biscuit',
+        id: i
+      });
+    }
+    setItems(newItems);
+  };
+
+  return (
+    <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-blue-300 to-blue-100 p-4">
+      <div className="mb-4 text-center">
+        <h1 className="text-4xl font-bold text-blue-900 mb-2">Tom and Jerry: Cheese Chase</h1>
+        <p className="text-lg text-blue-800">Use Arrow Keys or WASD to move Jerry</p>
+        <p className="text-md text-blue-700">Collect {WINNING_SCORE} points to win! (Cheese = 2pts, Biscuit = 1pt)</p>
+      </div>
+
+      <div className="bg-white rounded-lg shadow-2xl p-4 mb-4">
+        <div className="text-2xl font-bold text-center text-blue-900">
+          Score: {score} / {WINNING_SCORE}
+        </div>
+      </div>
+
+      <div className="relative bg-yellow-50 rounded-lg shadow-2xl overflow-hidden" style={{ width: CANVAS_WIDTH, height: CANVAS_HEIGHT }}>
+        {/* Items */}
+        {items.map(item => (
+          <div
+            key={item.id}
+            className="absolute transition-all duration-100"
+            style={{
+              left: item.x,
+              top: item.y,
+              width: ITEM_SIZE,
+              height: ITEM_SIZE
+            }}
+          >
+            <div className="text-3xl">
+              {item.type === 'cheese' ? '🧀' : '🍪'}
+            </div>
+          </div>
+        ))}
+
+        {/* Jerry */}
+        <div
+          className="absolute transition-all duration-100"
+          style={{
+            left: jerryPos.x,
+            top: jerryPos.y,
+            width: JERRY_SIZE,
+            height: JERRY_SIZE
+          }}
+        >
+          <div className="text-4xl">🐭</div>
+        </div>
+
+        {/* Tom */}
+        <div
+          className="absolute transition-all duration-100"
+          style={{
+            left: tomPos.x,
+            top: tomPos.y,
+            width: TOM_SIZE,
+            height: TOM_SIZE
+          }}
+        >
+          <div className="text-5xl">🐱</div>
+        </div>
+
+        {/* Game Over Overlay */}
+        {gameOver && (
+          <div className="absolute inset-0 bg-black bg-opacity-70 flex items-center justify-center">
+            <div className="bg-white rounded-lg p-8 text-center">
+              <div className="text-6xl mb-4">😿</div>
+              <h2 className="text-3xl font-bold text-red-600 mb-4">Tom Caught Jerry!</h2>
+              <p className="text-xl mb-4">Final Score: {score}</p>
+              <button
+                onClick={resetGame}
+                className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-lg text-xl"
+              >
+                Try Again
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Game Won Overlay */}
+        {gameWon && (
+          <div className="absolute inset-0 bg-black bg-opacity-70 flex items-center justify-center">
+            <div className="bg-white rounded-lg p-8 text-center">
+              <div className="text-6xl mb-4">🎉</div>
+              <h2 className="text-3xl font-bold text-green-600 mb-4">Jerry Wins!</h2>
+              <p className="text-xl mb-4">You collected enough food!</p>
+              <p className="text-lg mb-4">Final Score: {score}</p>
+              <button
+                onClick={resetGame}
+                className="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-lg text-xl"
+              >
+                Play Again
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="mt-4 text-center text-blue-800">
+        <p className="text-sm">🧀 Cheese = 2 points | 🍪 Biscuit = 1 point</p>
+        <p className="text-sm mt-2">Avoid Tom and collect {WINNING_SCORE} points to win!</p>
+      </div>
+    </div>
+  );
+};
+
+export default TomAndJerryGame;
